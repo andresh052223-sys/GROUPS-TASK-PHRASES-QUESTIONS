@@ -1,0 +1,6 @@
+{
+  "name": "Accounting English Challenge - Classroom Presentation & Quiz",
+  "description": "Interactive, projector-ready classroom presentation and quiz game for English students in Accounting and Finance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
