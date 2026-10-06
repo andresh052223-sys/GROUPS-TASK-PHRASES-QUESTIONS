@@ -20,8 +20,7 @@ interface PresentationHeaderProps {
   isPresentationMode: boolean;
   onTogglePresentationMode: () => void;
   onOpenTeacherMode: () => void;
-  onToggleScoreboard: () => void;
-  isScoreboardOpen: boolean;
+  onOpenSetup: () => void;
   textSize: TextSize;
   onChangeTextSize: (size: TextSize) => void;
   soundEnabled: boolean;
@@ -36,8 +35,7 @@ export const PresentationHeader: React.FC<PresentationHeaderProps> = ({
   isPresentationMode,
   onTogglePresentationMode,
   onOpenTeacherMode,
-  onToggleScoreboard,
-  isScoreboardOpen,
+  onOpenSetup,
   textSize,
   onChangeTextSize,
   soundEnabled,
@@ -90,18 +88,14 @@ export const PresentationHeader: React.FC<PresentationHeaderProps> = ({
                 <span className="hidden sm:inline">TEACHER MODE</span>
               </button>
 
-              {/* Scoreboard Toggle */}
+              {/* Team Setup Button */}
               <button
-                onClick={onToggleScoreboard}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold tracking-wide transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm ${
-                  isScoreboardOpen
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-slate-800/90 hover:bg-slate-700 text-slate-200 border-slate-700/80'
-                }`}
-                title="Mostrar/Ocultar Marcador de Equipos (Tecla P)"
+                onClick={onOpenSetup}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700/80 text-xs font-semibold tracking-wide transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                title="Configuración de Grupos (Team Setup)"
               >
                 <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">EQUIPOS</span>
+                <span className="hidden sm:inline">GRUPOS</span>
               </button>
 
               {/* Text Size Cycler */}

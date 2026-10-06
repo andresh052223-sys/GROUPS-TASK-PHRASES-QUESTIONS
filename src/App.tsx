@@ -6,41 +6,50 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QUESTIONS } from './data/questions';
 import { CATEGORIES } from './data/categories';
-import { Question, Team, TextSize, DisplayTheme } from './types';
+import { Question, Team, TextSize, DisplayTheme, PointAnimation } from './types';
 import { sounds, speakEnglish } from './utils/audio';
 import { PresentationHeader } from './components/PresentationHeader';
 import { PresentationFooter } from './components/PresentationFooter';
 import { SlideView } from './components/SlideView';
-import { Scoreboard } from './components/Scoreboard';
+import { PermanentScoreboard } from './components/PermanentScoreboard';
+import { TeamSetupScreen } from './components/TeamSetupScreen';
 import { TeacherModal } from './components/TeacherModal';
 import { CompletionScreen } from './components/CompletionScreen';
 import { CategoryTransitionBanner } from './components/CategoryTransitionBanner';
 
 const INITIAL_TEAMS: Team[] = [
-  { id: 1, name: 'Team 1', score: 0, color: 'bg-blue-500', active: true },
-  { id: 2, name: 'Team 2', score: 0, color: 'bg-emerald-500', active: true },
-  { id: 3, name: 'Team 3', score: 0, color: 'bg-amber-500', active: true },
-  { id: 4, name: 'Team 4', score: 0, color: 'bg-purple-500', active: true },
-  { id: 5, name: 'Team 5', score: 0, color: 'bg-rose-500', active: false },
-  { id: 6, name: 'Team 6', score: 0, color: 'bg-cyan-500', active: false },
+  { id: 1, number: 1, name: 'GROUP 1', score: 0, color: 'bg-blue-600', active: true },
+  { id: 2, number: 2, name: 'GROUP 2', score: 0, color: 'bg-emerald-600', active: true },
+  { id: 3, number: 3, name: 'GROUP 3', score: 0, color: 'bg-amber-600', active: true },
+  { id: 4, number: 4, name: 'GROUP 4', score: 0, color: 'bg-purple-600', active: true },
+  { id: 5, number: 5, name: 'GROUP 5', score: 0, color: 'bg-rose-600', active: false },
+  { id: 6, number: 6, name: 'GROUP 6', score: 0, color: 'bg-cyan-600', active: false },
 ];
 
 export default function App() {
+  const [isSetupMode, setIsSetupMode] = useState<boolean>(true);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [isPresentationMode, setIsPresentationMode] = useState<boolean>(false);
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState<boolean>(false);
-  const [isScoreboardOpen, setIsScoreboardOpen] = useState<boolean>(false);
   const [textSize, setTextSize] = useState<TextSize>('extra-large');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [theme, setTheme] = useState<DisplayTheme>('dark-slate');
+  const [animations, setAnimations] = useState<PointAnimation[]>([]);
+
   const [teams, setTeams] = useState<Team[]>(() => {
     try {
-      const saved = localStorage.getItem('accounting_english_teams');
-      return saved ? JSON.parse(saved) : INITIAL_TEAMS;
+      const saved = localStorage.getItem('accounting_english_groups');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
     } catch {
-      return INITIAL_TEAMS;
+      // Fallback
     }
+    return INITIAL_TEAMS;
   });
 
   const [activeCategoryBanner, setActiveCategoryBanner] = useState<number | null>(null);
@@ -49,7 +58,7 @@ export default function App() {
   // Save teams in localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('accounting_english_teams', JSON.stringify(teams));
+      localStorage.setItem('accounting_english_groups', JSON.stringify(teams));
     } catch {
       // Ignore
     }
@@ -65,6 +74,32 @@ export default function App() {
       prevCategoryIdRef.current = currentQuestion.categoryId;
     }
   }, [currentQuestion]);
+
+  // Point scoring with animations
+  const handleAddPoint = useCallback((teamId: number, delta: number) => {
+    setTeams((prev) =>
+      prev.map((t) => {
+        if (t.id === teamId) {
+          const nextScore = Math.max(0, t.score + delta);
+          return { ...t, score: nextScore };
+        }
+        return t;
+      })
+    );
+
+    sounds.playPoint(delta > 0);
+
+    const animId = Date.now() + Math.random();
+    setAnimations((prev) => [...prev, { teamId, delta, id: animId }]);
+    setTimeout(() => {
+      setAnimations((prev) => prev.filter((a) => a.id !== animId));
+    }, 1100);
+  }, []);
+
+  const handleResetScores = useCallback(() => {
+    setTeams((prev) => prev.map((t) => ({ ...t, score: 0 })));
+    sounds.playPoint(false);
+  }, []);
 
   // Actions
   const handleReveal = useCallback(() => {
@@ -102,7 +137,7 @@ export default function App() {
     setIsRevealed(false);
   }, []);
 
-  const handleReset = useCallback(() => {
+  const handleResetChallenge = useCallback(() => {
     setCurrentIndex(0);
     setIsRevealed(false);
     prevCategoryIdRef.current = QUESTIONS[0].categoryId;
@@ -124,7 +159,7 @@ export default function App() {
     });
   }, []);
 
-  // Listen to fullscreen exit from Escape or browser controls
+  // Listen to fullscreen exit
   useEffect(() => {
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) {
@@ -135,10 +170,10 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
-  // Global Keyboard Navigation
+  // Global Keyboard Navigation & Point Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input
+      // Ignore if user is currently typing in an input or textarea
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -146,6 +181,28 @@ export default function App() {
         return;
       }
 
+      // Check number keys 1–6 (both main number row and numpad)
+      const digitMatch = e.code.match(/^(Digit|Numpad)([1-6])$/);
+      const keyNum = digitMatch
+        ? parseInt(digitMatch[2], 10)
+        : ['1', '2', '3', '4', '5', '6'].includes(e.key)
+        ? parseInt(e.key, 10)
+        : null;
+
+      if (keyNum !== null && keyNum >= 1 && keyNum <= 6) {
+        const targetTeam = teams.find((t) => t.number === keyNum && t.active);
+        if (targetTeam) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            handleAddPoint(targetTeam.id, -1);
+          } else {
+            handleAddPoint(targetTeam.id, 1);
+          }
+          return;
+        }
+      }
+
+      // Standard presentation controls
       if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
         handleToggleReveal();
@@ -161,9 +218,6 @@ export default function App() {
       } else if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         setIsTeacherModalOpen((prev) => !prev);
-      } else if (e.key === 'p' || e.key === 'P') {
-        e.preventDefault();
-        setIsScoreboardOpen((prev) => !prev);
       } else if (e.key === 's' || e.key === 'S') {
         if (isRevealed && currentQuestion) {
           e.preventDefault();
@@ -179,6 +233,8 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    teams,
+    handleAddPoint,
     handleToggleReveal,
     handleNext,
     handlePrevious,
@@ -205,11 +261,22 @@ export default function App() {
     (c) => c.id === currentQuestion?.categoryId
   );
 
+  // If in initial Setup Mode, show Team Setup Screen first
+  if (isSetupMode) {
+    return (
+      <TeamSetupScreen
+        teams={teams}
+        setTeams={setTeams}
+        onStart={() => setIsSetupMode(false)}
+      />
+    );
+  }
+
   return (
     <div
-      className={`min-h-screen w-full flex flex-col justify-between overflow-x-hidden transition-colors duration-200 ${getThemeWrapperClass()}`}
+      className={`min-h-screen w-full flex flex-col lg:flex-row overflow-x-hidden transition-colors duration-200 ${getThemeWrapperClass()}`}
     >
-      {/* Category Change Banner */}
+      {/* Category Change Announcement Toast */}
       {activeCategoryBanner && currentCategoryInfo && (
         <CategoryTransitionBanner
           category={currentCategoryInfo}
@@ -217,70 +284,74 @@ export default function App() {
         />
       )}
 
-      {/* Header */}
-      {!isCompleted && currentQuestion && (
-        <PresentationHeader
-          question={currentQuestion}
-          totalQuestions={QUESTIONS.length}
-          isPresentationMode={isPresentationMode}
-          onTogglePresentationMode={togglePresentationMode}
-          onOpenTeacherMode={() => setIsTeacherModalOpen(true)}
-          onToggleScoreboard={() => setIsScoreboardOpen((prev) => !prev)}
-          isScoreboardOpen={isScoreboardOpen}
-          textSize={textSize}
-          onChangeTextSize={setTextSize}
-          soundEnabled={soundEnabled}
-          onToggleSound={() => setSoundEnabled((prev) => !prev)}
-          theme={theme}
-          onChangeTheme={setTheme}
-        />
-      )}
-
-      {/* Main Slide / Completion Content */}
-      <main className="flex-1 flex flex-col justify-center items-center w-full relative">
-        {isCompleted ? (
-          <CompletionScreen
-            teams={teams}
+      {/* Main Presentation Column (68%–72% of screen) */}
+      <div className="flex-1 lg:max-w-[72vw] xl:max-w-[70vw] 2xl:max-w-[68vw] flex flex-col justify-between min-w-0 h-screen overflow-y-auto">
+        {/* Header */}
+        {!isCompleted && currentQuestion && (
+          <PresentationHeader
+            question={currentQuestion}
             totalQuestions={QUESTIONS.length}
-            onRestart={handleReset}
-            onReview={() => {
-              setCurrentIndex(QUESTIONS.length - 1);
-              setIsRevealed(true);
-            }}
+            isPresentationMode={isPresentationMode}
+            onTogglePresentationMode={togglePresentationMode}
+            onOpenTeacherMode={() => setIsTeacherModalOpen(true)}
+            onOpenSetup={() => setIsSetupMode(true)}
+            textSize={textSize}
+            onChangeTextSize={setTextSize}
+            soundEnabled={soundEnabled}
+            onToggleSound={() => setSoundEnabled((prev) => !prev)}
+            theme={theme}
+            onChangeTheme={setTheme}
           />
-        ) : (
-          currentQuestion && (
-            <SlideView
-              question={currentQuestion}
-              isRevealed={isRevealed}
-              onReveal={handleReveal}
-              onNext={handleNext}
-              textSize={textSize}
-              theme={theme}
-            />
-          )
         )}
-      </main>
 
-      {/* Footer Navigation */}
-      {!isCompleted && (
-        <PresentationFooter
-          currentIndex={currentIndex}
-          totalQuestions={QUESTIONS.length}
-          isRevealed={isRevealed}
-          onPrevious={handlePrevious}
-          onNext={handleNext}
-          onToggleReveal={handleToggleReveal}
-          isPresentationMode={isPresentationMode}
-        />
-      )}
+        {/* Main Slide / Completion Content */}
+        <main className="flex-1 flex flex-col justify-center items-center w-full relative">
+          {isCompleted ? (
+            <CompletionScreen
+              teams={teams}
+              totalQuestions={QUESTIONS.length}
+              onRestart={handleResetChallenge}
+              onReview={() => {
+                setCurrentIndex(QUESTIONS.length - 1);
+                setIsRevealed(true);
+              }}
+            />
+          ) : (
+            currentQuestion && (
+              <SlideView
+                question={currentQuestion}
+                isRevealed={isRevealed}
+                onReveal={handleReveal}
+                onNext={handleNext}
+                textSize={textSize}
+                theme={theme}
+              />
+            )
+          )}
+        </main>
 
-      {/* Team Scoreboard Floating Widget / Drawer */}
-      <Scoreboard
+        {/* Footer Navigation */}
+        {!isCompleted && (
+          <PresentationFooter
+            currentIndex={currentIndex}
+            totalQuestions={QUESTIONS.length}
+            isRevealed={isRevealed}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onToggleReveal={handleToggleReveal}
+            isPresentationMode={isPresentationMode}
+          />
+        )}
+      </div>
+
+      {/* Right Column: Permanent Scoreboard (20%–25% of screen, always visible) */}
+      <PermanentScoreboard
         teams={teams}
-        setTeams={setTeams}
-        isOpen={isScoreboardOpen}
-        onToggle={() => setIsScoreboardOpen((prev) => !prev)}
+        onAddPoint={handleAddPoint}
+        onResetScores={handleResetScores}
+        onOpenSetup={() => setIsSetupMode(true)}
+        animations={animations}
+        isLight={theme === 'bright-projector'}
       />
 
       {/* Teacher Mode Modal */}
@@ -290,7 +361,7 @@ export default function App() {
         questions={QUESTIONS}
         currentIndex={currentIndex}
         onSelectQuestion={handleSelectQuestion}
-        onReset={handleReset}
+        onReset={handleResetChallenge}
       />
     </div>
   );

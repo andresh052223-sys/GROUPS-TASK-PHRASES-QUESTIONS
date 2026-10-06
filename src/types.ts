@@ -27,9 +27,17 @@ export interface CategoryInfo {
   badge: string;
 }
 
+export interface PointAnimation {
+  teamId: number;
+  delta: number;
+  id: number;
+}
+
 export interface Team {
   id: number;
-  name: string;
+  number: number; // 1, 2, 3, 4, 5, 6
+  name: string; // "GROUP 1", "GROUP 2", or custom like "GROUP 1 — THE ACCOUNTANTS"
+  customSubtitle?: string;
   score: number;
   color: string;
   active: boolean;
