@@ -4,8 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { QUESTIONS } from './data/questions';
-import { CATEGORIES } from './data/categories';
+import { MODULES, getModuleById } from './data/modules';
 import { Question, Team, TextSize, DisplayTheme, PointAnimation } from './types';
 import { sounds, speakEnglish } from './utils/audio';
 import { PresentationHeader } from './components/PresentationHeader';
@@ -13,6 +12,7 @@ import { PresentationFooter } from './components/PresentationFooter';
 import { SlideView } from './components/SlideView';
 import { PermanentScoreboard } from './components/PermanentScoreboard';
 import { TeamSetupScreen } from './components/TeamSetupScreen';
+import { ModuleSelectionScreen } from './components/ModuleSelectionScreen';
 import { TeacherModal } from './components/TeacherModal';
 import { CompletionScreen } from './components/CompletionScreen';
 import { CategoryTransitionBanner } from './components/CategoryTransitionBanner';
@@ -27,8 +27,24 @@ const INITIAL_TEAMS: Team[] = [
 ];
 
 export default function App() {
-  const [isSetupMode, setIsSetupMode] = useState<boolean>(true);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  // Screen and Module State
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [isTeamSetupOpen, setIsTeamSetupOpen] = useState<boolean>(false);
+
+  // Independent slide progress per module (Module 1 has 168 slides, Module 2 has 144 slides)
+  const [moduleProgress, setModuleProgress] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('english_classroom_module_progress');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // Ignore
+    }
+    return { 'module-1': 0, 'module-2': 0 };
+  });
+
+  // Presentation State
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [isPresentationMode, setIsPresentationMode] = useState<boolean>(false);
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState<boolean>(false);
@@ -37,6 +53,7 @@ export default function App() {
   const [theme, setTheme] = useState<DisplayTheme>('dark-slate');
   const [animations, setAnimations] = useState<PointAnimation[]>([]);
 
+  // Shared Teams State across all modules
   const [teams, setTeams] = useState<Team[]>(() => {
     try {
       const saved = localStorage.getItem('accounting_english_groups');
@@ -53,7 +70,7 @@ export default function App() {
   });
 
   const [activeCategoryBanner, setActiveCategoryBanner] = useState<number | null>(null);
-  const prevCategoryIdRef = useRef<number>(QUESTIONS[0].categoryId);
+  const prevCategoryIdRef = useRef<number>(1);
 
   // Save teams in localStorage
   useEffect(() => {
@@ -64,8 +81,41 @@ export default function App() {
     }
   }, [teams]);
 
-  const currentQuestion: Question | undefined = QUESTIONS[currentIndex];
-  const isCompleted = currentIndex >= QUESTIONS.length;
+  // Save module progress in localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'english_classroom_module_progress',
+        JSON.stringify(moduleProgress)
+      );
+    } catch {
+      // Ignore
+    }
+  }, [moduleProgress]);
+
+  // Current active module data
+  const currentModule = selectedModuleId ? getModuleById(selectedModuleId) : null;
+  const questions = currentModule ? currentModule.questions : [];
+  const categories = currentModule ? currentModule.categories : [];
+  const currentIndex = selectedModuleId ? moduleProgress[selectedModuleId] || 0 : 0;
+  const currentQuestion: Question | undefined = questions[currentIndex];
+  const isCompleted = currentModule ? currentIndex >= questions.length : false;
+
+  // Set current index for the active module
+  const setCurrentIndex = useCallback(
+    (newIndex: number | ((prev: number) => number)) => {
+      if (!selectedModuleId) return;
+      setModuleProgress((prev) => {
+        const current = prev[selectedModuleId] || 0;
+        const next = typeof newIndex === 'function' ? newIndex(current) : newIndex;
+        return {
+          ...prev,
+          [selectedModuleId]: Math.max(0, next),
+        };
+      });
+    },
+    [selectedModuleId]
+  );
 
   // Detect category change for transition banner
   useEffect(() => {
@@ -75,7 +125,7 @@ export default function App() {
     }
   }, [currentQuestion]);
 
-  // Point scoring with animations
+  // Point scoring with animations (1–6 keys and Shift+1–6)
   const handleAddPoint = useCallback((teamId: number, delta: number) => {
     setTeams((prev) =>
       prev.map((t) => {
@@ -101,7 +151,7 @@ export default function App() {
     sounds.playPoint(false);
   }, []);
 
-  // Actions
+  // Slide Actions
   const handleReveal = useCallback(() => {
     if (!isRevealed) {
       sounds.playReveal();
@@ -119,29 +169,32 @@ export default function App() {
   }, [isRevealed]);
 
   const handleNext = useCallback(() => {
-    if (currentIndex < QUESTIONS.length) {
+    if (currentModule && currentIndex < questions.length) {
       setCurrentIndex((prev) => prev + 1);
       setIsRevealed(false);
     }
-  }, [currentIndex]);
+  }, [currentModule, currentIndex, questions.length, setCurrentIndex]);
 
   const handlePrevious = useCallback(() => {
     if (currentIndex > 0) {
       setCurrentIndex((prev) => prev - 1);
       setIsRevealed(false);
     }
-  }, [currentIndex]);
+  }, [currentIndex, setCurrentIndex]);
 
-  const handleSelectQuestion = useCallback((index: number) => {
-    setCurrentIndex(index);
-    setIsRevealed(false);
-  }, []);
+  const handleSelectQuestion = useCallback(
+    (index: number) => {
+      setCurrentIndex(index);
+      setIsRevealed(false);
+    },
+    [setCurrentIndex]
+  );
 
-  const handleResetChallenge = useCallback(() => {
+  const handleResetModuleChallenge = useCallback(() => {
     setCurrentIndex(0);
     setIsRevealed(false);
-    prevCategoryIdRef.current = QUESTIONS[0].categoryId;
-  }, []);
+    prevCategoryIdRef.current = 1;
+  }, [setCurrentIndex]);
 
   const togglePresentationMode = useCallback(() => {
     setIsPresentationMode((prev) => {
@@ -202,6 +255,11 @@ export default function App() {
         }
       }
 
+      // If we are on the module selection screen, don't execute slide navigation
+      if (!selectedModuleId) {
+        return;
+      }
+
       // Standard presentation controls
       if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
@@ -218,6 +276,9 @@ export default function App() {
       } else if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         setIsTeacherModalOpen((prev) => !prev);
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setSelectedModuleId(null);
       } else if (e.key === 's' || e.key === 'S') {
         if (isRevealed && currentQuestion) {
           e.preventDefault();
@@ -234,6 +295,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     teams,
+    selectedModuleId,
     handleAddPoint,
     handleToggleReveal,
     handleNext,
@@ -257,21 +319,37 @@ export default function App() {
     }
   };
 
-  const currentCategoryInfo = CATEGORIES.find(
+  const currentCategoryInfo = categories.find(
     (c) => c.id === currentQuestion?.categoryId
   );
 
-  // If in initial Setup Mode, show Team Setup Screen first
-  if (isSetupMode) {
+  // VIEW 1: Team Setup Screen (Configuración de grupos)
+  if (isTeamSetupOpen) {
     return (
       <TeamSetupScreen
         teams={teams}
         setTeams={setTeams}
-        onStart={() => setIsSetupMode(false)}
+        onStart={() => setIsTeamSetupOpen(false)}
       />
     );
   }
 
+  // VIEW 2: Initial Home Screen — Module Selection (ENGLISH CLASSROOM — SELECT A MODULE)
+  if (!selectedModuleId || !currentModule) {
+    return (
+      <ModuleSelectionScreen
+        onSelectModule={(modId) => {
+          setSelectedModuleId(modId);
+          setIsRevealed(false);
+        }}
+        moduleProgress={moduleProgress}
+        teams={teams}
+        onOpenTeamSetup={() => setIsTeamSetupOpen(true)}
+      />
+    );
+  }
+
+  // VIEW 3: Module Presentation with Permanent Scoreboard
   return (
     <div
       className={`min-h-screen w-full flex flex-col lg:flex-row overflow-x-hidden transition-colors duration-200 ${getThemeWrapperClass()}`}
@@ -286,15 +364,20 @@ export default function App() {
 
       {/* Main Presentation Column (68%–72% of screen) */}
       <div className="flex-1 lg:max-w-[72vw] xl:max-w-[70vw] 2xl:max-w-[68vw] flex flex-col justify-between min-w-0 h-screen overflow-y-auto">
-        {/* Header */}
+        {/* Header with Modules button, Module title, and progress */}
         {!isCompleted && currentQuestion && (
           <PresentationHeader
             question={currentQuestion}
-            totalQuestions={QUESTIONS.length}
+            totalQuestions={questions.length}
+            moduleTitle={currentModule.fullTitle}
             isPresentationMode={isPresentationMode}
             onTogglePresentationMode={togglePresentationMode}
             onOpenTeacherMode={() => setIsTeacherModalOpen(true)}
-            onOpenSetup={() => setIsSetupMode(true)}
+            onOpenSetup={() => setIsTeamSetupOpen(true)}
+            onOpenModules={() => {
+              setSelectedModuleId(null);
+              setIsRevealed(false);
+            }}
             textSize={textSize}
             onChangeTextSize={setTextSize}
             soundEnabled={soundEnabled}
@@ -309,10 +392,10 @@ export default function App() {
           {isCompleted ? (
             <CompletionScreen
               teams={teams}
-              totalQuestions={QUESTIONS.length}
-              onRestart={handleResetChallenge}
+              totalQuestions={questions.length}
+              onRestart={handleResetModuleChallenge}
               onReview={() => {
-                setCurrentIndex(QUESTIONS.length - 1);
+                setCurrentIndex(questions.length - 1);
                 setIsRevealed(true);
               }}
             />
@@ -334,7 +417,7 @@ export default function App() {
         {!isCompleted && (
           <PresentationFooter
             currentIndex={currentIndex}
-            totalQuestions={QUESTIONS.length}
+            totalQuestions={questions.length}
             isRevealed={isRevealed}
             onPrevious={handlePrevious}
             onNext={handleNext}
@@ -344,24 +427,25 @@ export default function App() {
         )}
       </div>
 
-      {/* Right Column: Permanent Scoreboard (20%–25% of screen, always visible) */}
+      {/* Right Column: Permanent Scoreboard (28%–32% of screen, shared across modules) */}
       <PermanentScoreboard
         teams={teams}
         onAddPoint={handleAddPoint}
         onResetScores={handleResetScores}
-        onOpenSetup={() => setIsSetupMode(true)}
+        onOpenSetup={() => setIsTeamSetupOpen(true)}
         animations={animations}
         isLight={theme === 'bright-projector'}
       />
 
-      {/* Teacher Mode Modal */}
+      {/* Teacher Mode Modal (Dynamic per module) */}
       <TeacherModal
         isOpen={isTeacherModalOpen}
         onClose={() => setIsTeacherModalOpen(false)}
-        questions={QUESTIONS}
+        questions={questions}
+        categories={categories}
         currentIndex={currentIndex}
         onSelectQuestion={handleSelectQuestion}
-        onReset={handleResetChallenge}
+        onReset={handleResetModuleChallenge}
       />
     </div>
   );

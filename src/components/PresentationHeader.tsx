@@ -10,6 +10,7 @@ import {
   Moon,
   Trophy,
   BookOpen,
+  Layers,
 } from 'lucide-react';
 import { Question, TextSize, DisplayTheme } from '../types';
 import { sounds } from '../utils/audio';
@@ -17,10 +18,12 @@ import { sounds } from '../utils/audio';
 interface PresentationHeaderProps {
   question: Question;
   totalQuestions: number;
+  moduleTitle: string;
   isPresentationMode: boolean;
   onTogglePresentationMode: () => void;
   onOpenTeacherMode: () => void;
   onOpenSetup: () => void;
+  onOpenModules: () => void;
   textSize: TextSize;
   onChangeTextSize: (size: TextSize) => void;
   soundEnabled: boolean;
@@ -32,10 +35,12 @@ interface PresentationHeaderProps {
 export const PresentationHeader: React.FC<PresentationHeaderProps> = ({
   question,
   totalQuestions,
+  moduleTitle,
   isPresentationMode,
   onTogglePresentationMode,
   onOpenTeacherMode,
   onOpenSetup,
+  onOpenModules,
   textSize,
   onChangeTextSize,
   soundEnabled,
@@ -56,18 +61,22 @@ export const PresentationHeader: React.FC<PresentationHeaderProps> = ({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3">
-        {/* Left: Category and Question number */}
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-blue-400 drop-shadow-sm font-sans">
+        {/* Left: Module, Category and Question number */}
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-emerald-400 drop-shadow-sm font-sans truncate">
+              {moduleTitle}
+            </span>
+            <span className="text-slate-600 hidden sm:inline">•</span>
+            <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-blue-400 drop-shadow-sm font-sans truncate">
               {question.categoryName}
             </span>
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span className="text-sm sm:text-base font-black tracking-tight text-white tabular-nums">
-              QUESTION {question.id} / {totalQuestions}
+              SLIDE {question.id} / {totalQuestions}
             </span>
-            <span className="text-[11px] text-slate-400 hidden md:inline font-medium">
+            <span className="text-[11px] text-slate-400 hidden md:inline font-medium truncate">
               — {question.categoryTitle}
             </span>
           </div>
@@ -75,6 +84,16 @@ export const PresentationHeader: React.FC<PresentationHeaderProps> = ({
 
         {/* Right: Controls & Modes (Discreet in presentation mode) */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Modules button (available in both modes for seamless switching) */}
+          <button
+            onClick={onOpenModules}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700/80 text-xs font-semibold tracking-wide transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+            title="Cambiar de Módulo (Select a Module)"
+          >
+            <Layers className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden sm:inline">MODULES</span>
+          </button>
+
           {/* Controls visible only outside pure presentation mode or collapsed discretely */}
           {!isPresentationMode && (
             <>
@@ -184,3 +203,4 @@ export const PresentationHeader: React.FC<PresentationHeaderProps> = ({
     </header>
   );
 };
+

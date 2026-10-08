@@ -10,12 +10,12 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Question, CategoryInfo } from '../types';
-import { CATEGORIES } from '../data/categories';
 
 interface TeacherModalProps {
   isOpen: boolean;
   onClose: () => void;
   questions: Question[];
+  categories: CategoryInfo[];
   currentIndex: number;
   onSelectQuestion: (index: number) => void;
   onReset: () => void;
@@ -25,6 +25,7 @@ export const TeacherModal: React.FC<TeacherModalProps> = ({
   isOpen,
   onClose,
   questions,
+  categories,
   currentIndex,
   onSelectQuestion,
   onReset,
@@ -136,9 +137,9 @@ export const TeacherModal: React.FC<TeacherModalProps> = ({
                   : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
               }`}
             >
-              Todas (100)
+              Todas ({questions.length})
             </button>
-            {CATEGORIES.map((cat) => {
+            {categories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
               return (
                 <button

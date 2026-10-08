@@ -43,5 +43,19 @@ export interface Team {
   active: boolean;
 }
 
+export interface ModuleInfo {
+  id: string; // 'module-1' | 'module-2'
+  moduleNumber: number; // 1 | 2
+  title: string; // "GUÍA 5 — CONTABILIDAD" or "GUÍAS 1–2–3"
+  fullTitle: string; // "MÓDULO 1 · GUÍA 5 — CONTABILIDAD"
+  badge: string; // "168 SLIDES" | "144 SLIDES"
+  slideCount: number;
+  description: string;
+  themeColor: string;
+  accentGradient: string;
+  categories: CategoryInfo[];
+  questions: Question[];
+}
+
 export type DisplayTheme = 'dark-slate' | 'high-contrast-dark' | 'bright-projector';
 export type TextSize = 'normal' | 'large' | 'extra-large';
